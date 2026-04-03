@@ -1,0 +1,136 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hotmart Negociação API",
+    "description": "Calcula simulações financeiras para negociação Hotmart vs Hubla vs Gateway",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "https://SEU-APP.onrender.com" }
+  ],
+  "paths": {
+    "/hotmart": {
+      "post": {
+        "operationId": "simularHotmart",
+        "summary": "Simula parcelamentos Hotmart de 1x a 12x",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/HotmartReq" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Tabela de parcelamentos com líquido por N" }
+        }
+      }
+    },
+    "/hubla": {
+      "post": {
+        "operationId": "simularHubla",
+        "summary": "Simula parcelamentos Hubla de 1x a 12x",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/HublaReq" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Tabela de parcelamentos com líquido por N" }
+        }
+      }
+    },
+    "/gateway": {
+      "post": {
+        "operationId": "simularGateway",
+        "summary": "Simula parcelamentos Gateway/PagarMe de 1x a 12x",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GatewayReq" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Tabela de parcelamentos com líquido por N" }
+        }
+      }
+    },
+    "/comparativo": {
+      "post": {
+        "operationId": "comparativo",
+        "summary": "Compara todas as plataformas com projeção anual opcional",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ComparativoReq" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Comparativo com ranking e projeção anual" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HotmartReq": {
+        "type": "object",
+        "required": ["preco"],
+        "properties": {
+          "preco":                    { "type": "number", "description": "Preço do produto em R$" },
+          "taxa_plataforma":          { "type": "number", "default": 7.9,  "description": "Taxa da plataforma em % (ex: 7.9)" },
+          "taxa_d30_produtor":        { "type": "number", "default": 2.99, "description": "Taxa D30 cobrada do produtor em % a.m." },
+          "taxa_parcelamento_aluno":  { "type": "number", "default": 3.49, "description": "Taxa de parcelamento cobrada do aluno em % a.m." }
+        }
+      },
+      "HublaReq": {
+        "type": "object",
+        "required": ["preco"],
+        "properties": {
+          "preco":              { "type": "number" },
+          "mdr":                { "type": "number", "default": 5.99, "description": "MDR real em % (não a taxa efetiva exibida)" },
+          "taxa_fixa":          { "type": "number", "default": 2.49, "description": "Taxa fixa por venda em R$" },
+          "repasse_pct":        { "type": "number", "default": 25.0, "description": "% dos juros repassados ao produtor" },
+          "taxa_juros_aluno":   { "type": "number", "default": 3.19, "description": "Taxa de juros ao aluno em % a.m." }
+        }
+      },
+      "GatewayReq": {
+        "type": "object",
+        "required": ["preco"],
+        "properties": {
+          "preco":            { "type": "number" },
+          "mdr_por_parcela":  { "type": "array", "items": { "type": "number" }, "description": "Array de 12 valores de MDR (%) um para cada N de 1x a 12x" },
+          "taxa_fixa":        { "type": "number", "default": 0.49, "description": "Taxa fixa por transação em R$" }
+        }
+      },
+      "ComparativoReq": {
+        "type": "object",
+        "required": ["preco"],
+        "properties": {
+          "preco":                    { "type": "number" },
+          "hm_taxa_plataforma":       { "type": "number", "default": 7.9 },
+          "hm_taxa_d30_produtor":     { "type": "number", "default": 2.99 },
+          "hm_taxa_parcelamento_aluno": { "type": "number", "default": 3.49 },
+          "hb_mdr":                   { "type": "number", "description": "Informar para incluir Hubla" },
+          "hb_taxa_fixa":             { "type": "number", "default": 2.49 },
+          "hb_repasse_pct":           { "type": "number", "default": 25.0 },
+          "hb_taxa_juros_aluno":      { "type": "number", "default": 3.19 },
+          "gw_mdr_por_parcela":       { "type": "array", "items": { "type": "number" }, "description": "Informar para incluir Gateway" },
+          "gw_taxa_fixa":             { "type": "number", "default": 0.49 },
+          "faturamento_anual":        { "type": "number", "description": "Para projeção anual" },
+          "mix_cartao":               { "type": "array", "items": { "type": "number" }, "description": "12 valores somando 100 — share de cada parcelamento no cartão" },
+          "pct_pix":                  { "type": "number", "default": 10.0 },
+          "pct_boleto":               { "type": "number", "default": 0.7 },
+          "pct_cartao":               { "type": "number", "default": 89.3 }
+        }
+      }
+    }
+  }
+}
