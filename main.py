@@ -200,3 +200,94 @@ def comparativo(req: ComparativoReq):
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "1.0.0"}
+
+# ── Decodificador de proposta ──────────────────────────────────────────────────
+
+def resolver_taxa_aluno(P, n, parcela, tol=1e-8, max_iter=100):
+    """Newton-Raphson: resolve PMT(r,n,P) = parcela → retorna r"""
+    if n <= 1 or parcela <= 0:
+        return None
+    r = 0.03
+    for _ in range(max_iter):
+        fac = (1+r)**n
+        f  = P * (r * fac) / (fac - 1) - parcela
+        df = P * (fac * (1 + r*n - r*n*r) - r*r*fac) / ((fac-1)**2 + 1e-20)
+        rn = r - f / (df if abs(df) > 1e-12 else 1e-12)
+        if abs(rn - r) < tol:
+            return rn if rn > 0 else None
+        r = rn
+    return r if r > 0 else None
+
+class DecodificarReq(BaseModel):
+    preco: float
+    liquidos: List[float]           # liq1 a liq12 (obrigatório, 12 valores)
+    parcelas_aluno: Optional[List[float]] = None  # parc1 a parc12 (opcional)
+    taxa_fixa: float = 2.49         # taxa fixa por venda (R$)
+
+@app.post("/decodificar", summary="Decodifica proposta do concorrente a partir dos líquidos")
+def decodificar(req: DecodificarReq):
+    P = req.preco
+    fix = req.taxa_fixa
+
+    if len(req.liquidos) != 12:
+        return {"erro": "liquidos deve ter exatamente 12 valores (N=1 a 12)"}
+
+    liq = req.liquidos
+    parc = req.parcelas_aluno  # pode ser None
+
+    # Taxa fee real em 1x
+    fee_real_1x = round((P - liq[0] - fix) / P * 100, 4)
+    taxa_efetiva_media = round(sum((P - l) / P * 100 for l in liq) / 12, 4)
+
+    parcelas_decodificadas = []
+    for n in range(1, 13):
+        i = n - 1
+        liq_n = liq[i]
+        parc_n = parc[i] if parc and len(parc) >= n else None
+
+        taxa_efetiva_n = round((P - liq_n) / P * 100, 4)
+
+        # Taxa ao aluno implícita (Newton-Raphson)
+        taxa_aluno_impl = None
+        if parc_n and n > 1:
+            r = resolver_taxa_aluno(P, n, parc_n)
+            taxa_aluno_impl = round(r * 100, 4) if r else None
+
+        # MDR efetivo (para gateway: total_aluno - liq - fix) / total_aluno
+        mdr_ef = None
+        if parc_n and n > 1:
+            total_aluno = parc_n * n
+            if total_aluno > 0:
+                mdr_ef = round((total_aluno - liq_n - fix) / total_aluno * 100, 4)
+
+        # Repasse estimado (usando fee de 1x como base)
+        repasse_est = None
+        if parc_n and n > 1:
+            base = P * (1 - fee_real_1x/100) - fix
+            juros = parc_n * n - P
+            if juros > 0:
+                repasse_est = round((liq_n - base) / juros * 100, 2)
+
+        parcelas_decodificadas.append({
+            "n": n,
+            "parcela_aluno": round(parc_n, 2) if parc_n else None,
+            "total_aluno": round(parc_n * n, 2) if parc_n else None,
+            "liquido_produtor": round(liq_n, 2),
+            "taxa_efetiva_pct": taxa_efetiva_n,
+            "taxa_aluno_am_pct": taxa_aluno_impl,
+            "mdr_efetivo_pct": mdr_ef,
+            "repasse_estimado_pct": repasse_est
+        })
+
+    return {
+        "preco": P,
+        "taxa_fixa": fix,
+        "fee_real_1x_pct": fee_real_1x,
+        "taxa_efetiva_media_pct": taxa_efetiva_media,
+        "parcelas": parcelas_decodificadas,
+        "resumo": {
+            "taxa_fee_1x": f"{fee_real_1x}% + R${fix:.2f} fixo",
+            "taxa_aluno_estimada": f"{parcelas_decodificadas[5]['taxa_aluno_am_pct']}% a.m. (em 6x)" if parcelas_decodificadas[5]['taxa_aluno_am_pct'] else "não calculada — informe parcela do aluno",
+            "repasse_estimado": f"{parcelas_decodificadas[5]['repasse_estimado_pct']}% dos juros (em 6x)" if parcelas_decodificadas[5]['repasse_estimado_pct'] else "não calculado"
+        }
+    }
